@@ -1,29 +1,12 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import pymongo
 import uuid
+import worker
 
 app = Flask(__name__)
 
-# Connect to the database
-restaurants = None
+worker_object = worker.Worker()
 
-
-# Database URL
-db_url = 'localhost:27017'
-
-    # Make a connection to the database.
-try:
-    connection = pymongo.MongoClient(db_url)
-    database = connection.menus
-    restaurants = database.restaurants
-
-    print('Connection to the database successful.')
-
-except Exception as ex:
-    print('The database server might not be running. Please check!')
-    print(ex)
-
-# Check the DB connection
 @app.route('/') 
 def check_connection():
     return 'Hi'
@@ -31,76 +14,39 @@ def check_connection():
 # Read all the menus
 @app.route('/all')
 def view_all_menus():
-    menus = restaurants.find()
-    
-    # menus = menus['menu']
-    menus = [menu['name'] for menu in menus]
 
-    # Check if menu items exist.
-    if(len(menus) == 0):
-        return_status = 201
-        return_message = 'No items found. Start by adding a restaurant.'
-
-        response = {
-            'status' : return_status,
-            'data' : return_message,
-        }
-
-        print(response)
-        return jsonify(response)
-
-    return_status = 201
-
-    response = {
-        'status' : return_status,
-        'data' : menus,
-    }
+    response = worker_object.find_all_restaurant()
 
     return jsonify(response)
 
 # Add a new restaurant
 @app.route('/new/<string:new_type>/', methods = ['GET', 'POST'])
 def add_new_item(new_type):
-    if(new_type == 'restaurant'):
-        restaurant_name= request.form['restaurant_name']
-        try:
-            insert = {
-                'name': restaurant_name,
-                'menu': [],
-            }
 
-            restaurants.insert_one(insert)
-            print('restaurant added to the collection.')
+    # The post method is to take input from the user.
+    if(request.method == 'POST'):
+
+        if(new_type == 'restaurant'):
+            restaurant_name= request.form['restaurant_name']
             
-            return_status = 201
-            
+            response = worker_object.add_new_restaurant(restaurant_name)
+
+            return jsonify(response)
+
+        else:
+
+            return_status = 303
+
             response = {
                 'status' : return_status,
-                'data' : 'Restaurant has been successfully added'
+                'data' : 'No data to be inserted', 
             }
 
-            return response
-
-        except Exception as ex:
-            print(ex)
-            
-            return_status = 403
-            response = {
-                'status' : return_status,
-                'error' : ex
-            }
-            return response
-
-    else:
-
-        return_status = 303
-
-        response = {
-            'status' : return_status,
-            'data' : 'No data to be inserted', 
-        }
-
-        return response
+            return jsonify(response)
+    
+    # The GET method will show the template page to the user.
+    elif(request.method == 'GET'):
+        return render_template('add_new_restaurant.html')
 
 # Add a new item to a particular restaurant
 @app.route('/add/<restaurant_id>/')
